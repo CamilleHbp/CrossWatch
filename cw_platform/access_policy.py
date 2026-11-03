@@ -31,6 +31,7 @@ MONITOR_GET_PATHS = frozenset(
         "/api/events/groups",
         "/api/events/tree",
         "/api/events/context",
+        "/api/export/items",
         "/api/mcp",
     }
 )
