@@ -1280,8 +1280,7 @@ def api_export_items(
     limit: int = Query(500, ge=1, le=1000),
     request: Request = cast(Request, None),
 ) -> dict[str, Any]:
-    # Raw, paged JSON for programmatic readers such as recommendation services.
-    # History is collapsed to the latest watch per item.
+    # History collapses to the latest watch per item, so pages count titles rather than plays.
     provider = provider.upper().strip()
     s = _load_state({feature})
     inst = _export_instance_for_request(_load_config_safe(), request, provider, provider_instance)
