@@ -58,3 +58,27 @@ def test_rejects_unsupported_feature_and_missing_provider(monkeypatch) -> None:
     assert client.get("/api/export/items", params={"provider": "TRAKT", "feature": "watchlist"}).status_code == 422
     assert client.get("/api/export/items").status_code == 422
     assert client.get("/api/export/items", params={"provider": "PLEX"}).json()["items"] == []
+
+
+def test_crosswatch_tracker_reads_its_own_store_and_collapses_rewatches(monkeypatch) -> None:
+    client = _client(monkeypatch)
+    tracker = {
+        "tmdb:100": {"type": "movie", "title": "Lock, Stock", "ids": {"imdb": "tt0120735"},
+                     "watched_at": "2016-08-23T08:39:00.000Z"},
+        "imdb:tt0369277#s01e01": {"type": "episode", "title": "S01E01", "series_title": "Bible Black",
+                                  "season": 1, "episode": 1, "ids": {"tvdb": "4344192"},
+                                  "show_ids": {"imdb": "tt0369277"}, "watched_at": "2014-02-19T15:33:00.000Z"},
+    }
+    calls: list[tuple[str, object]] = []
+
+    def load_state(kind, snapshot=None, provider_instance=None):
+        calls.append((kind, provider_instance))
+        return {"items": tracker if kind == "history" else {}, "ts": 0}
+
+    monkeypatch.setattr(svc.editor, "load_state", load_state)
+    body = client.get("/api/export/items", params={"provider": "CROSSWATCH"}).json()
+    assert body["total"] == 2
+    assert [row["key"] for row in body["items"]] == ["imdb:tt0369277#s01e01", "tmdb:100"]
+    assert body["items"][0]["show_ids"] == {"imdb": "tt0369277"}
+    assert client.get("/api/export/items", params={"provider": "CROSSWATCH", "feature": "ratings"}).json()["items"] == []
+    assert calls == [("history", "all"), ("ratings", "all")]

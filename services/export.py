@@ -21,7 +21,7 @@ from cw_platform.config_base import CONFIG as CONFIG_DIR, load_config
 from cw_platform.history_events import base_key_from_history_event, history_epoch_from_key, is_history_event_key
 from cw_platform.modules_registry import load_sync_ops
 from cw_platform.provider_instances import sanitize_instance_label
-from services import export_trakt
+from services import editor, export_trakt
 
 router = APIRouter(prefix="/api", tags=["export"])
 
@@ -1282,9 +1282,13 @@ def api_export_items(
 ) -> dict[str, Any]:
     # History collapses to the latest watch per item, so pages count titles rather than plays.
     provider = provider.upper().strip()
-    s = _load_state({feature})
     inst = _export_instance_for_request(_load_config_safe(), request, provider, provider_instance)
-    bucket = _feature_bucket(s, provider, feature, instance_id=inst, include_rewatches=False)
+    if provider == "CROSSWATCH":
+        # The CW Tracker's own store is authoritative; sync baselines only exist once a pair has run.
+        tracker = editor.load_state(feature, provider_instance=inst if isinstance(inst, str) else inst[0])["items"]
+        bucket = _collapse_history_bucket(tracker) if feature == "history" else tracker
+    else:
+        bucket = _feature_bucket(_load_state({feature}), provider, feature, instance_id=inst, include_rewatches=False)
     keys = sorted(bucket)
     items: list[dict[str, Any]] = []
     for key in keys[offset : offset + limit]:
