@@ -418,6 +418,7 @@ def test_monitor_allowlist_is_get_only_and_explicit() -> None:
         "/api/snapshots/list",
         "/api/events/recent",
         "/api/events/groups/12/events",
+        "/api/export/items",
     ):
         assert monitor_api_allowed(monitor, path, "GET") is True, path
         assert monitor_api_allowed(monitor, path, "POST") is False, path

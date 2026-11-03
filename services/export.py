@@ -1271,6 +1271,42 @@ def api_export_sample(
     }
 
 
+@router.get("/export/items", response_class=JSONResponse)
+def api_export_items(
+    provider: str = Query(..., min_length=1, description="TRAKT|PLEX|EMBY|JELLYFIN|SIMKL|MDBLIST|CROSSWATCH"),
+    provider_instance: str = Query("all", description="default|all|<instance_id>"),
+    feature: Literal["history", "ratings"] = Query("history"),
+    offset: int = Query(0, ge=0),
+    limit: int = Query(500, ge=1, le=1000),
+    request: Request = cast(Request, None),
+) -> dict[str, Any]:
+    # Raw, paged JSON for programmatic readers such as recommendation services.
+    # History is collapsed to the latest watch per item.
+    provider = provider.upper().strip()
+    s = _load_state({feature})
+    inst = _export_instance_for_request(_load_config_safe(), request, provider, provider_instance)
+    bucket = _feature_bucket(s, provider, feature, instance_id=inst, include_rewatches=False)
+    keys = sorted(bucket)
+    items: list[dict[str, Any]] = []
+    for key in keys[offset : offset + limit]:
+        it = bucket[key]
+        t, title, year, _when, ids = _row_base(it)
+        row: dict[str, Any] = {"key": key, "type": t, "title": title, "year": year, "ids": ids}
+        if t in ("season", "episode"):
+            row["series_title"] = str(it.get("series_title") or "")
+            row["show_ids"] = _norm_ids(it.get("show_ids") or {})
+            row["season"] = it.get("season")
+            if t == "episode":
+                row["episode"] = it.get("episode")
+        if feature == "history":
+            row["watched_at"] = _actual_watched_at(it)
+        else:
+            row["rating"] = it.get("rating")
+            row["rated_at"] = str(it.get("rated_at") or "")
+        items.append(row)
+    return {"items": items, "total": len(keys), "offset": offset, "limit": limit}
+
+
 @router.get("/export/file")
 def api_export_file(
     provider: str = Query("", description="TRAKT|PLEX|EMBY|JELLYFIN|SIMKL|MDBLIST|CROSSWATCH"),
